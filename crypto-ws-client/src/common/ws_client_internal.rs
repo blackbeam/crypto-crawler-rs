@@ -61,8 +61,10 @@ impl<H: MessageHandler> WSClientInternal<H> {
 
     fn get_send_interval_ms(&self) -> Option<u64> {
         match self.exchange {
-            "binance" => Some(100), // WebSocket connections have a limit of 10 incoming messages per second
-            "kucoin" => Some(100),  //  Message limit sent to the server: 100 per 10 seconds
+            // Binance WebSocket connections have a limit of 10 incoming messages per second,
+            // but this requirement may actually be tighter because of sporadic errors
+            "binance" => Some(500),
+            "kucoin" => Some(100), //  Message limit sent to the server: 100 per 10 seconds
             _ => None,
         }
     }
