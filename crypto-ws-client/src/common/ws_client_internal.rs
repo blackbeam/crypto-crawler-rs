@@ -10,6 +10,7 @@ use std::{
 
 use flate2::read::{DeflateDecoder, GzDecoder};
 use log::*;
+use tokio::sync::oneshot;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::common::message_handler::{MessageHandler, MiscMessage};
@@ -90,6 +91,7 @@ impl<H: MessageHandler> WSClientInternal<H> {
         };
 
         let num_unanswered_ping = Arc::new(AtomicIsize::new(0)); // for debug only
+        let (_heartbeat_guard, mut heartbeat_guard) = oneshot::channel::<()>();
         if let Some((msg, interval)) = handler.get_ping_msg_and_interval() {
             // send heartbeat periodically
             let command_tx_clone = self.command_tx.clone();
@@ -100,12 +102,19 @@ impl<H: MessageHandler> WSClientInternal<H> {
                     tokio::time::interval(duration)
                 };
                 loop {
-                    let now = timer.tick().await;
-                    debug!("{:?} sending ping {}", now, msg.to_text().unwrap());
-                    if let Err(err) = command_tx_clone.send(msg.clone()).await {
-                        error!("Error sending ping {}", err);
-                    } else {
-                        num_unanswered_ping_clone.fetch_add(1, Ordering::SeqCst);
+                    tokio::select! {
+                        _ = &mut heartbeat_guard => {
+                            debug!("Breaking heartbeat loop because of no interest");
+                            break;
+                        }
+                        now = timer.tick() => {
+                            debug!("{:?} sending ping {}", now, msg.to_text().unwrap());
+                            if let Err(err) = command_tx_clone.send(msg.clone()).await {
+                                error!("Error sending ping {}", err);
+                            } else {
+                                num_unanswered_ping_clone.fetch_add(1, Ordering::SeqCst);
+                            }
+                        }
                     }
                 }
             });
