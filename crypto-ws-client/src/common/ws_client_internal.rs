@@ -185,8 +185,7 @@ impl<H: MessageHandler> WSClientInternal<H> {
                         }
                         None => warn!("Received a close message without CloseFrame"),
                     }
-                    // break;
-                    panic!("Received a CloseFrame"); //fail fast so that pm2 can restart the process
+                    break;
                 }
             };
 
